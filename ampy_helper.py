@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import subprocess
 import re
@@ -10,6 +11,10 @@ SOURCE_DIR = './build'  # The source directory on your computer
 TARGET_DIR = '/'  # The target directory on your MicroPython board
 PYTHON_VERSION = "3.11"
 
+EXCLUDE_FILES_FROM_STRIPPING = ['source.py', '*.config.py']
+EXCLUDE_FILES_FROM_COPY = ['README.md', 'LICENSE', 'ampy_helper.py', '.gitignore', '._DS_Store']
+EXCLUDE_DIRS_FROM_COPY = ['build', '.idea', '.git']
+
 AMPY_CMD = 'ampy --port {} '.format(PORT)  # Base ampy command with port
 PATH = os.path.expanduser(f'~/Library/Python/{PYTHON_VERSION}/bin')
 
@@ -20,23 +25,26 @@ def strip_comments_from_py(content):
     return re.sub(pattern, '', content)
 
 
+def should_exclude(filename):
+    for pattern in EXCLUDE_FILES_FROM_STRIPPING:
+        if fnmatch.fnmatch(filename, pattern):
+            return True
+    return False
+
+
 def copy_and_strip_files(src, dest):
-    # Create the destination directory if it doesn't exist
     os.makedirs(dest, exist_ok=True)
     for root, dirs, files in os.walk(src, topdown=True):
-        # Exclude certain directories and files
-        dirs[:] = [d for d in dirs if d not in ['build', '.idea', '.git']]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS_FROM_COPY]
         files = [f for f in files if
-                 f not in ['README.md', 'LICENSE', 'build_and_install.py', '.gitignore', '._DS_Store']]
+                 f not in EXCLUDE_FILES_FROM_COPY]
 
-        # Copy and strip files as necessary
         for file in files:
             src_file_path = os.path.join(root, file)
             dest_file_path = os.path.join(dest, os.path.relpath(root, src), file)
             os.makedirs(os.path.dirname(dest_file_path), exist_ok=True)
 
-            # Check if it's a Python file to strip comments
-            if file.endswith('.py'):
+            if file.endswith('.py') and not should_exclude(file):
                 with open(src_file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 stripped_content = strip_comments_from_py(content)
